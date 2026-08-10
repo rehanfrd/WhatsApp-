@@ -5,7 +5,6 @@ import 'package:firebase_database/firebase_database.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Aapka Firebase Config Manual Initialization
   await Firebase.initializeApp(
     options: const FirebaseOptions(
       apiKey: "AIzaSyB82Pj-Qcv05Wvdr941nnfAOwj1TU6FkUU",
@@ -19,17 +18,17 @@ void main() async {
     ),
   );
   
-  runApp(const WhatsAppClone());
+  runApp(const OneChatApp());
 }
 
-class WhatsAppClone extends StatelessWidget {
-  const WhatsAppClone({super.key});
+class OneChatApp extends StatelessWidget {
+  const OneChatApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'WhatsApp',
+      title: 'One Chat',
       theme: ThemeData(
         primaryColor: const Color(0xFF075E54),
         scaffoldBackgroundColor: const Color(0xFFECE5DD),
@@ -56,7 +55,7 @@ class HomeLayout extends StatelessWidget {
       initialIndex: 1,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('WhatsApp', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          title: const Text('One Chat', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           actions: [
             IconButton(icon: const Icon(Icons.camera_alt_outlined, color: Colors.white), onPressed: () {}),
             IconButton(icon: const Icon(Icons.search, color: Colors.white), onPressed: () {}),
@@ -75,12 +74,12 @@ class HomeLayout extends StatelessWidget {
             ],
           ),
         ),
-        body: TabBarView(
+        body: const TabBarView(
           children: [
-            const Center(child: Text("Communities")),
-            const ChatsTab(),
-            const Center(child: Text("Status Updates")),
-            const Center(child: Text("Call Logs")),
+            Center(child: Text("Communities")),
+            ChatsTab(),
+            Center(child: Text("Status Updates")),
+            Center(child: Text("Call Logs")),
           ],
         ),
         floatingActionButton: FloatingActionButton(
@@ -159,9 +158,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         leadingWidth: 70,
         leading: InkWell(
           onTap: () => Navigator.pop(context),
-          child: Row(
+          child: const Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
+            children: [
               Icon(Icons.arrow_back, size: 24, color: Colors.white),
               CircleAvatar(
                 radius: 18,
