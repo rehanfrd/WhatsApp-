@@ -79,18 +79,20 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLogin = true;
   bool _isLoading = false;
 
   Future<void> _submitAuth() async {
+    final username = _usernameController.text.trim().toLowerCase();
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
-    if (email.isEmpty || password.isEmpty) {
+    if (email.isEmpty || password.isEmpty || (!_isLogin && username.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Email aur Password dono bharein!")),
+        const SnackBar(content: Text("Saari details sahi se bharein!")),
       );
       return;
     }
@@ -103,10 +105,20 @@ class _LoginScreenState extends State<LoginScreen> {
           password: password,
         );
       } else {
-        await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        UserCredential userCred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: email,
           password: password,
         );
+        
+        // Save Username to Firebase Database
+        if (userCred.user != null) {
+          DatabaseReference userRef = FirebaseDatabase.instance.ref().child("users");
+          await userRef.child(userCred.user!.uid).set({
+            'username': username,
+            'email': email,
+          });
+          await userRef.child("usernames/$username").set(userCred.user!.uid);
+        }
       }
     } on FirebaseAuthException catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -137,6 +149,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF075E54)),
               ),
               const SizedBox(height: 30),
+              if (!_isLogin) ...[
+                TextField(
+                  controller: _usernameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Choose Username',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.person),
+                  ),
+                ),
+                const SizedBox(height: 15),
+              ],
               TextField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
@@ -188,12 +211,51 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-class HomeLayout extends StatelessWidget {
+class HomeLayout extends StatefulWidget {
   const HomeLayout({super.key});
 
-  void _showFeatureNotice(BuildContext context, String title) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("$title selected!"), duration: const Duration(seconds: 1)),
+  @override
+  State<HomeLayout> createState() => _HomeLayoutState();
+}
+
+class _HomeLayoutState extends State<HomeLayout> {
+  void _openNewChatDialog() {
+    final TextEditingController searchUsernameController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Start New Chat"),
+        content: TextField(
+          controller: searchUsernameController,
+          decoration: const InputDecoration(
+            hintText: "Enter Receiver Username",
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF075E54)),
+            onPressed: () {
+              String targetUser = searchUsernameController.text.trim().toLowerCase();
+              if (targetUser.isNotEmpty) {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ChatDetailScreen(targetUsername: targetUser),
+                  ),
+                );
+              }
+            },
+            child: const Text("Chat", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -207,25 +269,17 @@ class HomeLayout extends StatelessWidget {
           title: const Text('One Chat', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           actions: [
             IconButton(
-              icon: const Icon(Icons.camera_alt_outlined, color: Colors.white),
-              onPressed: () => _showFeatureNotice(context, "Camera"),
-            ),
-            IconButton(
               icon: const Icon(Icons.search, color: Colors.white),
-              onPressed: () => _showFeatureNotice(context, "Search"),
+              onPressed: _openNewChatDialog,
             ),
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert, color: Colors.white),
               onSelected: (value) {
                 if (value == "Logout") {
                   FirebaseAuth.instance.signOut();
-                } else {
-                  _showFeatureNotice(context, value);
                 }
               },
               itemBuilder: (BuildContext context) => [
-                const PopupMenuItem(value: "New group", child: Text("New group")),
-                const PopupMenuItem(value: "Settings", child: Text("Settings")),
                 const PopupMenuItem(value: "Logout", child: Text("Logout", style: TextStyle(color: Colors.red))),
               ],
             ),
@@ -243,16 +297,16 @@ class HomeLayout extends StatelessWidget {
             ],
           ),
         ),
-        body: const TabBarView(
+        body: TabBarView(
           children: [
-            Center(child: Text("Communities Screen")),
-            ChatsTab(),
-            Center(child: Text("Status Updates")),
-            Center(child: Text("No Recent Calls")),
+            const Center(child: Text("Communities Screen")),
+            ChatsTab(onNewChatPressed: _openNewChatDialog),
+            const Center(child: Text("Status Updates")),
+            const Center(child: Text("No Recent Calls")),
           ],
         ),
         floatingActionButton: FloatingActionButton(
-          onPressed: () => _showFeatureNotice(context, "New Chat"),
+          onPressed: _openNewChatDialog,
           backgroundColor: const Color(0xFF25D366),
           child: const Icon(Icons.chat, color: Colors.white),
         ),
@@ -262,43 +316,34 @@ class HomeLayout extends StatelessWidget {
 }
 
 class ChatsTab extends StatelessWidget {
-  const ChatsTab({super.key});
+  final VoidCallback onNewChatPressed;
+  const ChatsTab({super.key, required this.onNewChatPressed});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.white,
-      child: ListView.separated(
-        itemCount: 3,
-        separatorBuilder: (context, index) => const Divider(height: 1, indent: 70),
-        itemBuilder: (context, index) {
-          return ListTile(
-            leading: const CircleAvatar(
-              radius: 24,
-              backgroundColor: Color(0xFF075E54),
-              child: Icon(Icons.person, color: Colors.white, size: 28),
-            ),
-            title: Text('Dost ${index + 1}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            subtitle: const Text('Tap to open chat', maxLines: 1, overflow: TextOverflow.ellipsis),
-            trailing: const Text('Now', style: TextStyle(color: Colors.grey, fontSize: 12)),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ChatDetailScreen(userName: 'Dost ${index + 1}'),
-                ),
-              );
-            },
-          );
-        },
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.chat_bubble_outline, size: 70, color: Colors.grey),
+          const SizedBox(height: 10),
+          const Text("Koi chat nahi hai. Floating button (+) dabakar Username se chat shuru karein!",
+              textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+          const SizedBox(height: 15),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF075E54)),
+            onPressed: onNewChatPressed,
+            child: const Text("Start Chat with Username", style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
 }
 
 class ChatDetailScreen extends StatefulWidget {
-  final String userName;
-  const ChatDetailScreen({super.key, required this.userName});
+  final String targetUsername;
+  const ChatDetailScreen({super.key, required this.targetUsername});
 
   @override
   State<ChatDetailScreen> createState() => _ChatDetailScreenState();
@@ -306,17 +351,43 @@ class ChatDetailScreen extends StatefulWidget {
 
 class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final TextEditingController _messageController = TextEditingController();
-  final DatabaseReference _dbRef = FirebaseDatabase.instance.ref().child("chats");
   final ImagePicker _picker = ImagePicker();
   bool _isUploading = false;
+  String _myUsername = '';
+  String _chatRoomId = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _setupChatRoom();
+  }
+
+  Future<void> _setupChatRoom() async {
+    User? currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      DatabaseEvent event = await FirebaseDatabase.instance.ref().child("users/${currentUser.uid}/username").once();
+      if (event.snapshot.value != null) {
+        _myUsername = event.snapshot.value.toString();
+      } else {
+        _myUsername = currentUser.email!.split('@')[0];
+      }
+
+      // Generate Unique Chat Room ID for two users
+      List<String> ids = [_myUsername, widget.targetUsername];
+      ids.sort();
+      setState(() {
+        _chatRoomId = ids.join("_");
+      });
+    }
+  }
 
   void _sendMessage({String? imageUrl}) {
-    final user = FirebaseAuth.instance.currentUser;
-    String senderEmail = user?.email ?? 'User';
+    if (_chatRoomId.isEmpty) return;
+    final DatabaseReference dbRef = FirebaseDatabase.instance.ref().child("chats/$_chatRoomId");
 
     if (_messageController.text.trim().isNotEmpty || imageUrl != null) {
-      _dbRef.push().set({
-        'sender': senderEmail,
+      dbRef.push().set({
+        'sender': _myUsername,
         'message': _messageController.text.trim(),
         'imageUrl': imageUrl ?? '',
         'timestamp': DateTime.now().millisecondsSinceEpoch,
@@ -351,8 +422,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentUserEmail = FirebaseAuth.instance.currentUser?.email ?? '';
-
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
@@ -371,114 +440,113 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             ],
           ),
         ),
-        title: Text(widget.userName, style: const TextStyle(color: Colors.white, fontSize: 18)),
-        actions: [
-          IconButton(icon: const Icon(Icons.videocam, color: Colors.white), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.call, color: Colors.white), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.more_vert, color: Colors.white), onPressed: () {}),
-        ],
+        title: Text(widget.targetUsername, style: const TextStyle(color: Colors.white, fontSize: 18)),
       ),
-      body: Column(
-        children: [
-          if (_isUploading) const LinearProgressIndicator(color: Color(0xFF075E54)),
-          Expanded(
-            child: StreamBuilder(
-              stream: _dbRef.onValue,
-              builder: (context, AsyncSnapshot<DatabaseEvent> snapshot) {
-                if (!snapshot.hasData || snapshot.data?.snapshot.value == null) {
-                  return const Center(child: Text("No messages yet."));
-                }
-                Map<dynamic, dynamic> map = snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
-                List<dynamic> list = map.values.toList();
-                return ListView.builder(
-                  itemCount: list.length,
-                  itemBuilder: (context, index) {
-                    bool isMe = list[index]['sender'] == currentUserEmail;
-                    String? imgUrl = list[index]['imageUrl'];
-                    String msg = list[index]['message'] ?? '';
-
-                    return Align(
-                      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: isMe ? const Color(0xFFE7FFDB) : Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (imgUrl != null && imgUrl.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 4.0),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(imgUrl, width: 200, fit: BoxFit.cover),
-                                ),
-                              ),
-                            if (msg.isNotEmpty)
-                              Text(msg, style: const TextStyle(fontSize: 16)),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
+      body: _chatRoomId.isEmpty
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF075E54)))
+          : Column(
               children: [
+                if (_isUploading) const LinearProgressIndicator(color: Color(0xFF075E54)),
                 Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(25),
-                    ),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.emoji_emotions_outlined, color: Colors.grey),
-                          onPressed: () {},
-                        ),
-                        Expanded(
-                          child: TextField(
-                            controller: _messageController,
-                            decoration: const InputDecoration(
-                              hintText: "Message",
-                              border: InputBorder.none,
+                  child: StreamBuilder(
+                    stream: FirebaseDatabase.instance.ref().child("chats/$_chatRoomId").onValue,
+                    builder: (context, AsyncSnapshot<DatabaseEvent> snapshot) {
+                      if (!snapshot.hasData || snapshot.data?.snapshot.value == null) {
+                        return const Center(child: Text("No messages yet. Say Hi!"));
+                      }
+                      Map<dynamic, dynamic> map = snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
+                      List<dynamic> list = map.values.toList();
+                      list.sort((a, b) => (a['timestamp'] ?? 0).compareTo(b['timestamp'] ?? 0));
+
+                      return ListView.builder(
+                        itemCount: list.length,
+                        itemBuilder: (context, index) {
+                          bool isMe = list[index]['sender'] == _myUsername;
+                          String? imgUrl = list[index]['imageUrl'];
+                          String msg = list[index]['message'] ?? '';
+
+                          return Align(
+                            alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: isMe ? const Color(0xFFE7FFDB) : Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (imgUrl != null && imgUrl.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 4.0),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Image.network(imgUrl, width: 200, fit: BoxFit.cover),
+                                      ),
+                                    ),
+                                  if (msg.isNotEmpty)
+                                    Text(msg, style: const TextStyle(fontSize: 16)),
+                                ],
+                              ),
                             ),
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.attach_file, color: Colors.grey),
-                          onPressed: () => _pickAndUploadImage(ImageSource.gallery),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.camera_alt, color: Colors.grey),
-                          onPressed: () => _pickAndUploadImage(ImageSource.camera),
-                        ),
-                      ],
-                    ),
+                          );
+                        },
+                      );
+                    },
                   ),
                 ),
-                const SizedBox(width: 5),
-                CircleAvatar(
-                  backgroundColor: const Color(0xFF00A884),
-                  radius: 24,
-                  child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.white),
-                    onPressed: () => _sendMessage(),
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                          child: Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.emoji_emotions_outlined, color: Colors.grey),
+                                onPressed: () {},
+                              ),
+                              Expanded(
+                                child: TextField(
+                                  controller: _messageController,
+                                  decoration: const InputDecoration(
+                                    hintText: "Message",
+                                    border: InputBorder.none,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.attach_file, color: Colors.grey),
+                                onPressed: () => _pickAndUploadImage(ImageSource.gallery),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.camera_alt, color: Colors.grey),
+                                onPressed: () => _pickAndUploadImage(ImageSource.camera),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      CircleAvatar(
+                        backgroundColor: const Color(0xFF00A884),
+                        radius: 24,
+                        child: IconButton(
+                          icon: const Icon(Icons.send, color: Colors.white),
+                          onPressed: () => _sendMessage(),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
-        ],
-      ),
     );
   }
 }
