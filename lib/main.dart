@@ -44,7 +44,6 @@ class OneChatApp extends StatelessWidget {
           secondary: const Color(0xFF25D366),
         ),
       ),
-      // Auth Gate: Check karega ki user logged in hai ya nahi
       home: const AuthGate(),
     );
   }
@@ -412,7 +411,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                           children: [
                             if (imgUrl != null && imgUrl.isNotEmpty)
                               Padding(
-                                padding: const EdgeInsets.bottom: 4.0,
+                                padding: const EdgeInsets.only(bottom: 4.0),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
                                   child: Image.network(imgUrl, width: 200, fit: BoxFit.cover),
