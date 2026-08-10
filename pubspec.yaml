@@ -1,5 +1,5 @@
-name: whatsapp_clone
-description: "A complete WhatsApp Clone with Flutter and Firebase."
+name: one_chat
+description: "One Chat - Realtime Messaging App built with Flutter and Firebase"
 publish_to: 'none'
 version: 1.0.0+1
 
