@@ -92,7 +92,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (email.isEmpty || password.isEmpty || (!_isLogin && username.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Saari details sahi se bharein!")),
+        const SnackBar(content: Text("Sabhi details sahi se bharein!")),
       );
       return;
     }
@@ -110,14 +110,12 @@ class _LoginScreenState extends State<LoginScreen> {
           password: password,
         );
         
-        // Save Username to Firebase Database
         if (userCred.user != null) {
           DatabaseReference userRef = FirebaseDatabase.instance.ref().child("users");
           await userRef.child(userCred.user!.uid).set({
             'username': username,
             'email': email,
           });
-          await userRef.child("usernames/$username").set(userCred.user!.uid);
         }
       }
     } on FirebaseAuthException catch (e) {
@@ -145,7 +143,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 16),
               const Text(
-                'Welcome to One Chat',
+                'One Chat Login',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF075E54)),
               ),
               const SizedBox(height: 30),
@@ -153,7 +151,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextField(
                   controller: _usernameController,
                   decoration: const InputDecoration(
-                    labelText: 'Choose Username',
+                    labelText: 'Choose Unique Username',
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.person),
                   ),
@@ -199,7 +197,7 @@ class _LoginScreenState extends State<LoginScreen> {
               TextButton(
                 onPressed: () => setState(() => _isLogin = !_isLogin),
                 child: Text(
-                  _isLogin ? "Account nahi hai? Sign Up karein" : "Pehle se account hai? Login karein",
+                  _isLogin ? "Naya Account Banayein" : "Pehle se account hai? Login karein",
                   style: const TextStyle(color: Color(0xFF075E54)),
                 ),
               )
@@ -219,17 +217,17 @@ class HomeLayout extends StatefulWidget {
 }
 
 class _HomeLayoutState extends State<HomeLayout> {
-  void _openNewChatDialog() {
-    final TextEditingController searchUsernameController = TextEditingController();
+  void _startChatDialog() {
+    final TextEditingController searchController = TextEditingController();
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Start New Chat"),
+        title: const Text("New Chat"),
         content: TextField(
-          controller: searchUsernameController,
+          controller: searchController,
           decoration: const InputDecoration(
-            hintText: "Enter Receiver Username",
+            hintText: "Enter Receiver's Username",
             border: OutlineInputBorder(),
           ),
         ),
@@ -241,18 +239,18 @@ class _HomeLayoutState extends State<HomeLayout> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF075E54)),
             onPressed: () {
-              String targetUser = searchUsernameController.text.trim().toLowerCase();
-              if (targetUser.isNotEmpty) {
+              String target = searchController.text.trim().toLowerCase();
+              if (target.isNotEmpty) {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => ChatDetailScreen(targetUsername: targetUser),
+                    builder: (context) => ChatDetailScreen(targetUsername: target),
                   ),
                 );
               }
             },
-            child: const Text("Chat", style: TextStyle(color: Colors.white)),
+            child: const Text("Start Chat", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -270,7 +268,7 @@ class _HomeLayoutState extends State<HomeLayout> {
           actions: [
             IconButton(
               icon: const Icon(Icons.search, color: Colors.white),
-              onPressed: _openNewChatDialog,
+              onPressed: _startChatDialog,
             ),
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert, color: Colors.white),
@@ -299,14 +297,14 @@ class _HomeLayoutState extends State<HomeLayout> {
         ),
         body: TabBarView(
           children: [
-            const Center(child: Text("Communities Screen")),
-            ChatsTab(onNewChatPressed: _openNewChatDialog),
+            const Center(child: Text("Communities")),
+            ChatsTab(onNewChatPressed: _startChatDialog),
             const Center(child: Text("Status Updates")),
-            const Center(child: Text("No Recent Calls")),
+            const Center(child: Text("Calls Log")),
           ],
         ),
         floatingActionButton: FloatingActionButton(
-          onPressed: _openNewChatDialog,
+          onPressed: _startChatDialog,
           backgroundColor: const Color(0xFF25D366),
           child: const Icon(Icons.chat, color: Colors.white),
         ),
@@ -322,20 +320,27 @@ class ChatsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.chat_bubble_outline, size: 70, color: Colors.grey),
-          const SizedBox(height: 10),
-          const Text("Koi chat nahi hai. Floating button (+) dabakar Username se chat shuru karein!",
-              textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
-          const SizedBox(height: 15),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF075E54)),
-            onPressed: onNewChatPressed,
-            child: const Text("Start Chat with Username", style: TextStyle(color: Colors.white)),
-          ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.chat_bubble_outline, size: 70, color: Colors.grey),
+            const SizedBox(height: 10),
+            const Text(
+              "Koi chat active nahi hai.\n(+) Button dabayein aur samne wale ka Username daal kar chat karein!",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF075E54)),
+              onPressed: onNewChatPressed,
+              icon: const Icon(Icons.add, color: Colors.white),
+              label: const Text("Message By Username", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -365,14 +370,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   Future<void> _setupChatRoom() async {
     User? currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser != null) {
-      DatabaseEvent event = await FirebaseDatabase.instance.ref().child("users/${currentUser.uid}/username").once();
+      DatabaseEvent event = await FirebaseDatabase.instance
+          .ref()
+          .child("users/${currentUser.uid}/username")
+          .once();
+          
       if (event.snapshot.value != null) {
         _myUsername = event.snapshot.value.toString();
       } else {
         _myUsername = currentUser.email!.split('@')[0];
       }
 
-      // Generate Unique Chat Room ID for two users
       List<String> ids = [_myUsername, widget.targetUsername];
       ids.sort();
       setState(() {
@@ -413,7 +421,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Upload failed: $e")),
+        SnackBar(content: Text("Image upload nahi ho payi: $e")),
       );
     } finally {
       if (mounted) setState(() => _isUploading = false);
@@ -452,7 +460,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     stream: FirebaseDatabase.instance.ref().child("chats/$_chatRoomId").onValue,
                     builder: (context, AsyncSnapshot<DatabaseEvent> snapshot) {
                       if (!snapshot.hasData || snapshot.data?.snapshot.value == null) {
-                        return const Center(child: Text("No messages yet. Say Hi!"));
+                        return const Center(child: Text("Say Hi! Pehla message bhejo."));
                       }
                       Map<dynamic, dynamic> map = snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
                       List<dynamic> list = map.values.toList();
